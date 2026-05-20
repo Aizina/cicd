@@ -1,3 +1,5 @@
+/* global require:readonly */
+
 const { test, describe, expect } = require('@playwright/test')
 
 describe('Pokedex', () => {
