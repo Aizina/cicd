@@ -14,3 +14,5 @@ Start by running `npm install` inside the project folder
 
 
 SMALL CHANGE BRANCH
+
+ANOTHER CHANGE
