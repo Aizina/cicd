@@ -1,0 +1,14 @@
+﻿name: Temporary failure test
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  fail_on_purpose:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Fail on purpose
+        run: exit 1
