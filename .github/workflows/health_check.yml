@@ -1,0 +1,35 @@
+﻿name: Periodic health check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'
+
+jobs:
+  health_check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check deployed app health
+        uses: jtalk/url-health-check-action@v4
+        with:
+          url: ${{ secrets.APP_HEALTH_URL }}
+          follow-redirect: true
+          max-attempts: 3
+          retry-delay: 10s
+          retry-all: true
+
+      - name: Notify Discord about failed health check
+        if: ${{ failure() }}
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: failure
+          title: Health check failed
+          description: |
+            The deployed Pokedex app did not respond successfully.
+
+            Repository: ${{ github.repository }}
+            URL secret: APP_HEALTH_URL
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          color: 0xff0000
