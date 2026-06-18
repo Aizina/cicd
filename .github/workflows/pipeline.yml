@@ -10,7 +10,7 @@ on:
     types: [opened, synchronize]
 
 jobs:
-  simple_deployment_pipeline:
+  lint:
     runs-on: ubuntu-latest
 
     env:
@@ -32,11 +32,68 @@ jobs:
       - name: Check style
         run: npm run eslint
 
-      - name: Build
-        run: npm run build
+  unit_tests:
+    runs-on: ubuntu-latest
+
+    env:
+      NODE_OPTIONS: --openssl-legacy-provider
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Run tests
         run: npm test -- --watchAll=false
+
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      NODE_OPTIONS: --openssl-legacy-provider
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+  e2e_tests:
+    runs-on: ubuntu-latest
+
+    env:
+      NODE_OPTIONS: --openssl-legacy-provider
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
@@ -44,14 +101,20 @@ jobs:
       - name: Run end-to-end tests
         run: npm run test:e2e
 
+  deploy:
+    needs: [lint, unit_tests, build, e2e_tests]
+    runs-on: ubuntu-latest
+
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(join(github.event.commits.*.message, ' '), '#skip') }}
+
+    steps:
       - name: Trigger deployment
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(join(github.event.commits.*.message, ' '), '#skip') }}
         env:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: curl -fsS "$RENDER_DEPLOY_HOOK"
 
   tag_release:
-    needs: [simple_deployment_pipeline]
+    needs: [lint, unit_tests, build, e2e_tests]
     runs-on: ubuntu-latest
 
     permissions:
@@ -70,3 +133,49 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEFAULT_BUMP: patch
+
+  notify_success:
+    needs: [deploy, tag_release]
+    runs-on: ubuntu-latest
+
+    if: ${{ success() }}
+
+    steps:
+      - name: Notify Discord about successful deployment
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          title: New version deployed
+          description: |
+            A new version of the Pokedex app was deployed and tagged successfully.
+
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+          nodetail: true
+          color: 0x00ff00
+
+  notify_failure:
+    needs: [lint, unit_tests, build, e2e_tests, deploy, tag_release]
+    runs-on: ubuntu-latest
+
+    if: ${{ always() && contains(toJson(needs), 'failure') }}
+
+    steps:
+      - name: Notify Discord about failed build
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: failure
+          title: Build failed
+          description: |
+            The CI/CD pipeline failed.
+
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            Commit message: ${{ github.event.head_commit.message }}
+            Author: ${{ github.event.head_commit.author.name }}
+
+            Check the GitHub Actions logs for details.
+          color: 0xff0000
