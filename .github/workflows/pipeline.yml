@@ -135,7 +135,7 @@ jobs:
           DEFAULT_BUMP: patch
 
   notify_success:
-    needs: [deploy]
+    needs: [deploy, tag_release]
     runs-on: ubuntu-latest
 
     if: ${{ success() }}
@@ -147,9 +147,11 @@ jobs:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}
           title: New version deployed
           description: |
-            A new version of the Pokedex app was deployed successfully.
-            Commit: ${{ github.sha }}
+            A new version of the Pokedex app was deployed and tagged successfully.
+
             Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
           nodetail: true
           color: 0x00ff00
 
